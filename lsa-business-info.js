@@ -2,11 +2,21 @@
   "use strict";
 
   /* =========================================================
-     MARTINE LAW - LSA BUSINESS INFO
-     FAST + GOOGLE CUSTOM CHECKBOX FIX
+     MARTINE LAW - GOOGLE LSA BUSINESS INFO
+     DYNAMIC ALL-TABS VERSION
      =========================================================
 
-     EXACTLY THESE 6 ON EVERY AVAILABLE TAB:
+     Automatically detects ALL available tabs.
+
+     Example:
+     ✓ Criminal Lawyer
+     ✓ DUI Lawyer
+     ✓ Family Lawyer
+     ✓ Lawyer
+     ✓ Traffic Lawyer
+     ✓ Any additional Google category
+
+     EXACTLY THESE 6 ON EVERY TAB:
 
      ✓ Evening appointment by request
      ✓ Speaks Spanish
@@ -15,26 +25,44 @@
      ✓ Minority-owned & operated
      ✓ Accepting new clients
 
-     TABS:
-     ✓ Criminal Lawyer
-     ✓ Family Lawyer - skip if unavailable
-     ✓ Lawyer
-     ✓ Traffic Lawyer
-
-     DOES NOT CLICK SAVE.
+     IMPORTANT:
+     - No hardcoded tab count
+     - Handles 4, 5, 6+ tabs
+     - Processes tabs in displayed order
+     - Removes other selected highlights
+     - Does NOT click SAVE
      ========================================================= */
 
-  const LOCK = "__MARTINE_LSA_INFO_V4__";
+
+  const LOCK =
+    "__MARTINE_LSA_BUSINESS_INFO_DYNAMIC__";
+
 
   if (window[LOCK]) {
-    console.warn("⚠ Business Info automation is already running.");
+    console.warn(
+      "⚠ Business Info automation is already running."
+    );
     return;
   }
 
+
   window[LOCK] = true;
 
-  window.LSA_INFO = window.LSA_INFO || {};
-  const APP = window.LSA_INFO;
+
+  window.LSA_INFO =
+    window.LSA_INFO || {};
+
+
+  const APP =
+    window.LSA_INFO;
+
+
+  APP.stopRequested = false;
+
+
+  /* =========================================================
+     REQUIRED HIGHLIGHTS
+     ========================================================= */
 
   APP.required = [
     "Evening appointment by request",
@@ -45,22 +73,33 @@
     "Accepting new clients"
   ];
 
-  APP.tabs = [
-    { name: "Criminal Lawyer", optional: false },
-    { name: "Family Lawyer", optional: true },
-    { name: "Lawyer", optional: false },
-    { name: "Traffic Lawyer", optional: false }
-  ];
 
-  APP.delay = {
-    tab: 120,
-    click: 45,
-    retry: 35,
-    betweenTabs: 100
+  APP.requiredSet =
+    new Set();
+
+
+  /* =========================================================
+     SPEED SETTINGS
+     ========================================================= */
+
+  APP.settings = {
+    tabWait: 350,
+    clickWait: 70,
+    stateTimeout: 500,
+    statePoll: 20,
+    betweenTabs: 120
   };
 
+
+  /* =========================================================
+     HELPERS
+     ========================================================= */
+
   APP.sleep = ms =>
-    new Promise(resolve => setTimeout(resolve, ms));
+    new Promise(resolve =>
+      setTimeout(resolve, ms)
+    );
+
 
   APP.normalize = text =>
     String(text || "")
@@ -73,53 +112,131 @@
       .replace(/\s+/g, " ")
       .trim();
 
-  APP.requiredSet = new Set(
-    APP.required.map(APP.normalize)
-  );
+
+  APP.required.forEach(name => {
+    APP.requiredSet.add(
+      APP.normalize(name)
+    );
+  });
+
+
+  APP.rendered = element => {
+
+    if (!element) {
+      return false;
+    }
+
+
+    const style =
+      getComputedStyle(element);
+
+
+    const rect =
+      element.getBoundingClientRect();
+
+
+    return (
+      rect.width > 0 &&
+      rect.height > 0 &&
+      style.display !== "none" &&
+      style.visibility !== "hidden"
+    );
+  };
 
 
   /* =========================================================
-     MODAL
+     STOP
+     ========================================================= */
+
+  APP.stop = () => {
+
+    APP.stopRequested = true;
+
+    console.warn(
+      "🛑 Stop requested."
+    );
+  };
+
+
+  APP.checkStop = () => {
+
+    if (APP.stopRequested) {
+
+      throw new Error(
+        "Automation stopped manually."
+      );
+    }
+  };
+
+
+  /* =========================================================
+     BUSINESS INFO MODAL
      ========================================================= */
 
   APP.getModal = () => {
 
-    const dialogs = Array.from(
-      document.querySelectorAll(
-        '[role="dialog"], [aria-modal="true"]'
-      )
-    );
-
-    let modal = dialogs.find(el => {
-      const text = APP.normalize(el.textContent);
-
-      return (
-        text.includes("business info") &&
-        text.includes("select up to 6 things")
+    const dialogs =
+      Array.from(
+        document.querySelectorAll(
+          '[role="dialog"], [aria-modal="true"]'
+        )
       );
-    });
+
+
+    let modal =
+      dialogs.find(dialog => {
+
+        const text =
+          APP.normalize(
+            dialog.textContent
+          );
+
+
+        return (
+          text.includes("business info") &&
+          text.includes("select up to 6 things")
+        );
+      });
+
 
     if (modal) {
       return modal;
     }
 
-    const candidates = Array.from(
-      document.querySelectorAll("div")
-    ).filter(el => {
 
-      const text = APP.normalize(el.textContent);
+    /*
+     * Fallback for Google's custom modal.
+     */
 
-      return (
-        text.includes("business info") &&
-        text.includes("select up to 6 things") &&
-        text.includes("save")
-      );
-    });
+    const candidates =
+      Array.from(
+        document.querySelectorAll("div")
+      )
+      .filter(element => {
+
+        const text =
+          APP.normalize(
+            element.textContent
+          );
+
+
+        return (
+          text.includes("business info") &&
+          text.includes("select up to 6 things") &&
+          text.includes("save")
+        );
+      });
+
 
     candidates.sort((a, b) => {
 
-      const ar = a.getBoundingClientRect();
-      const br = b.getBoundingClientRect();
+      const ar =
+        a.getBoundingClientRect();
+
+
+      const br =
+        b.getBoundingClientRect();
+
 
       return (
         ar.width * ar.height -
@@ -127,155 +244,413 @@
       );
     });
 
+
     return candidates[0] || null;
   };
 
 
   /* =========================================================
-     TABS
+     AUTOMATIC TAB DISCOVERY
+
+     NO TAB NAMES ARE HARDCODED.
      ========================================================= */
 
-  APP.findTab = name => {
+  APP.getTabs = () => {
 
-    const modal = APP.getModal();
+    const modal =
+      APP.getModal();
 
-    if (!modal) {
-      return null;
-    }
-
-    const target = APP.normalize(name);
-
-    const roleTabs = Array.from(
-      modal.querySelectorAll('[role="tab"]')
-    );
-
-    let tab = roleTabs.find(
-      el => APP.normalize(el.textContent) === target
-    );
-
-    if (tab) {
-      return tab;
-    }
-
-    const elements = Array.from(
-      modal.querySelectorAll(
-        "span,div,a,button"
-      )
-    );
-
-    const match = elements.find(
-      el => APP.normalize(el.textContent) === target
-    );
-
-    if (!match) {
-      return null;
-    }
-
-    return (
-      match.closest(
-        '[role="tab"], [role="button"], button, a'
-      ) ||
-      match
-    );
-  };
-
-
-  APP.openTab = async name => {
-
-    const tab = APP.findTab(name);
-
-    if (!tab) {
-      return false;
-    }
-
-    /*
-     * Always click. Google does not always expose
-     * aria-selected correctly on these tabs.
-     */
-
-    try {
-      tab.click();
-    } catch (_) {
-      tab.dispatchEvent(
-        new MouseEvent("click", {
-          bubbles: true,
-          cancelable: true,
-          view: window
-        })
-      );
-    }
-
-    await APP.sleep(APP.delay.tab);
-
-    return true;
-  };
-
-
-  /* =========================================================
-     GOOGLE MENUITEM CHECKBOX ROWS
-     ========================================================= */
-
-  APP.getRows = () => {
-
-    const modal = APP.getModal();
 
     if (!modal) {
       return [];
     }
 
+
+    /* -----------------------------------------------------
+       Preferred: actual ARIA tabs
+       ----------------------------------------------------- */
+
+    let tabs =
+      Array.from(
+        modal.querySelectorAll(
+          '[role="tab"]'
+        )
+      )
+      .filter(APP.rendered);
+
+
+    /* -----------------------------------------------------
+       Google fallback.
+
+       Find elements before "Select up to 6 things..."
+       that look like tab controls.
+       ----------------------------------------------------- */
+
+    if (!tabs.length) {
+
+      const instruction =
+        Array.from(
+          modal.querySelectorAll(
+            "div,span,p"
+          )
+        )
+        .find(element =>
+          APP.normalize(
+            element.textContent
+          ).includes(
+            "select up to 6 things"
+          )
+        );
+
+
+      if (instruction) {
+
+        const instructionY =
+          instruction
+            .getBoundingClientRect()
+            .top;
+
+
+        tabs =
+          Array.from(
+            modal.querySelectorAll(
+              [
+                "button",
+                "a",
+                '[role="button"]',
+                "[tabindex]"
+              ].join(",")
+            )
+          )
+          .filter(element => {
+
+            if (
+              !APP.rendered(element)
+            ) {
+              return false;
+            }
+
+
+            const text =
+              String(
+                element.innerText ||
+                element.textContent ||
+                ""
+              )
+                .replace(/\s+/g, " ")
+                .trim();
+
+
+            if (
+              !text ||
+              text.length > 50
+            ) {
+              return false;
+            }
+
+
+            const rect =
+              element.getBoundingClientRect();
+
+
+            return (
+              rect.top <
+              instructionY
+            );
+          });
+      }
+    }
+
+
+    /* -----------------------------------------------------
+       Deduplicate
+       ----------------------------------------------------- */
+
+    tabs =
+      Array.from(
+        new Set(tabs)
+      );
+
+
+    /*
+     * Sort left-to-right.
+     */
+
+    tabs.sort((a, b) => {
+
+      const ar =
+        a.getBoundingClientRect();
+
+
+      const br =
+        b.getBoundingClientRect();
+
+
+      if (
+        Math.abs(
+          ar.top - br.top
+        ) > 10
+      ) {
+
+        return ar.top - br.top;
+      }
+
+
+      return ar.left - br.left;
+    });
+
+
+    return tabs;
+  };
+
+
+  /* =========================================================
+     TAB NAME
+     ========================================================= */
+
+  APP.getTabName = tab => {
+
+    return String(
+      tab.innerText ||
+      tab.textContent ||
+      "Unnamed tab"
+    )
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+
+
+  /* =========================================================
+     CURRENT CATEGORY ID
+
+     Helps us detect when Google actually changed tabs.
+     ========================================================= */
+
+  APP.getCurrentCategory = () => {
+
+    const rows =
+      APP.getRows();
+
+
+    if (!rows.length) {
+      return "";
+    }
+
+
+    return (
+      rows[0].getAttribute(
+        "service-category-id"
+      ) || ""
+    );
+  };
+
+
+  /* =========================================================
+     ACTIVATE TAB
+     ========================================================= */
+
+  APP.activateTab =
+    async tab => {
+
+      APP.checkStop();
+
+
+      const previousCategory =
+        APP.getCurrentCategory();
+
+
+      try {
+
+        tab.scrollIntoView({
+          block: "nearest",
+          inline: "center",
+          behavior: "auto"
+        });
+
+      } catch (_) {}
+
+
+      /*
+       * Click actual tab.
+       */
+
+      try {
+
+        tab.click();
+
+      } catch (_) {
+
+        tab.dispatchEvent(
+          new MouseEvent(
+            "click",
+            {
+              bubbles: true,
+              cancelable: true,
+              view: window
+            }
+          )
+        );
+      }
+
+
+      /*
+       * Don't just blindly wait.
+       * Watch for actual tab/category update.
+       */
+
+      let elapsed = 0;
+
+
+      while (
+        elapsed <
+        APP.settings.tabWait
+      ) {
+
+        APP.checkStop();
+
+
+        const selected =
+          tab.getAttribute(
+            "aria-selected"
+          ) === "true";
+
+
+        const currentCategory =
+          APP.getCurrentCategory();
+
+
+        if (
+          selected ||
+          (
+            previousCategory &&
+            currentCategory &&
+            currentCategory !==
+              previousCategory
+          )
+        ) {
+
+          break;
+        }
+
+
+        await APP.sleep(20);
+
+        elapsed += 20;
+      }
+
+
+      /*
+       * Small render stabilization.
+       */
+
+      await APP.sleep(60);
+    };
+
+
+  /* =========================================================
+     GOOGLE BUSINESS HIGHLIGHT ROWS
+     ========================================================= */
+
+  APP.getRows = () => {
+
+    const modal =
+      APP.getModal();
+
+
+    if (!modal) {
+      return [];
+    }
+
+
     return Array.from(
       modal.querySelectorAll(
         '[role="menuitemcheckbox"]'
       )
-    ).filter(row => {
+    )
+    .filter(row => {
 
       if (
-        row.getAttribute("aria-disabled") === "true" ||
-        row.getAttribute("callout-disabled") === "true"
+        !APP.rendered(row)
       ) {
         return false;
       }
 
-      const rect = row.getBoundingClientRect();
 
-      return (
-        rect.width > 0 &&
-        rect.height > 0
-      );
+      if (
+        row.getAttribute(
+          "aria-disabled"
+        ) === "true"
+      ) {
+        return false;
+      }
+
+
+      if (
+        row.getAttribute(
+          "callout-disabled"
+        ) === "true"
+      ) {
+        return false;
+      }
+
+
+      return true;
     });
   };
 
 
-  APP.label = row => {
+  /* =========================================================
+     ROW LABEL
+     ========================================================= */
+
+  APP.getRowLabel = row => {
+
+    if (!row) {
+      return "";
+    }
+
 
     /*
-     * Google's text normally sits inside the span whose ID
-     * matches the callout-id.
+     * Prefer callout-id related label.
      */
 
     const calloutId =
-      row.getAttribute("callout-id");
+      row.getAttribute(
+        "callout-id"
+      );
+
 
     if (calloutId) {
 
       try {
 
-        const labelElement =
+        const exact =
           row.querySelector(
-            `#${CSS.escape(calloutId)}`
+            `#${CSS.escape(
+              calloutId
+            )}`
           );
 
-        if (labelElement) {
 
-          return String(
-            labelElement.textContent || ""
-          )
-            .replace(/\s+/g, " ")
-            .trim();
+        if (exact) {
+
+          const text =
+            String(
+              exact.textContent ||
+              ""
+            )
+              .replace(/\s+/g, " ")
+              .trim();
+
+
+          if (text) {
+            return text;
+          }
         }
 
       } catch (_) {}
     }
+
 
     return String(
       row.innerText ||
@@ -287,156 +662,214 @@
   };
 
 
-  APP.checked = row =>
-    row &&
-    row.getAttribute("aria-checked") === "true";
-
+  /* =========================================================
+     FIND ROW BY NAME
+     ========================================================= */
 
   APP.findRow = name => {
 
     const wanted =
       APP.normalize(name);
 
-    return APP.getRows().find(
-      row =>
-        APP.normalize(
-          APP.label(row)
-        ) === wanted
-    ) || null;
+
+    return (
+      APP.getRows().find(
+        row =>
+          APP.normalize(
+            APP.getRowLabel(row)
+          ) === wanted
+      ) ||
+      null
+    );
   };
 
 
   /* =========================================================
-     NATURAL MOUSE SEQUENCE
+     READ GOOGLE CHECKED STATE
      ========================================================= */
 
-  APP.mouseSequence = target => {
+  APP.getCheckedState = row => {
 
-    if (!target) {
-      return;
+    if (!row) {
+      return null;
     }
 
-    const options = {
-      bubbles: true,
-      cancelable: true,
-      composed: true,
-      view: window,
-      button: 0,
-      buttons: 1
-    };
+
+    const rowState =
+      row.getAttribute(
+        "aria-checked"
+      );
+
+
+    if (
+      rowState === "true"
+    ) {
+      return true;
+    }
+
+
+    if (
+      rowState === "false"
+    ) {
+      return false;
+    }
+
 
     /*
-     * Google jsaction commonly listens to mouseup,
-     * mousedown and click rather than .click() alone.
+     * Google's nested checkbox element.
      */
 
-    try {
-      target.dispatchEvent(
-        new PointerEvent(
-          "pointerdown",
-          {
-            ...options,
-            pointerId: 1,
-            pointerType: "mouse",
-            isPrimary: true
-          }
-        )
+    const nested =
+      row.querySelector(
+        '[aria-checked]'
       );
-    } catch (_) {}
 
-    target.dispatchEvent(
-      new MouseEvent(
-        "mousedown",
-        options
-      )
-    );
 
-    try {
-      target.dispatchEvent(
-        new PointerEvent(
-          "pointerup",
-          {
-            ...options,
-            buttons: 0,
-            pointerId: 1,
-            pointerType: "mouse",
-            isPrimary: true
-          }
-        )
-      );
-    } catch (_) {}
+    if (nested) {
 
-    target.dispatchEvent(
-      new MouseEvent(
-        "mouseup",
-        {
-          ...options,
-          buttons: 0
-        }
-      )
-    );
+      const state =
+        nested.getAttribute(
+          "aria-checked"
+        );
 
-    target.dispatchEvent(
-      new MouseEvent(
-        "click",
-        {
-          ...options,
-          buttons: 0
-        }
-      )
-    );
+
+      if (
+        state === "true"
+      ) {
+        return true;
+      }
+
+
+      if (
+        state === "false"
+      ) {
+        return false;
+      }
+    }
+
+
+    return null;
   };
 
 
   /* =========================================================
-     FIND GOOGLE'S ACTUAL VISUAL CHECKBOX
+     WAIT FOR STATE
+     ========================================================= */
+
+  APP.waitForState =
+    async (
+      name,
+      expected
+    ) => {
+
+      let elapsed = 0;
+
+
+      while (
+        elapsed <
+        APP.settings.stateTimeout
+      ) {
+
+        const fresh =
+          APP.findRow(name);
+
+
+        if (
+          fresh &&
+          APP.getCheckedState(
+            fresh
+          ) === expected
+        ) {
+
+          return true;
+        }
+
+
+        await APP.sleep(
+          APP.settings.statePoll
+        );
+
+
+        elapsed +=
+          APP.settings.statePoll;
+      }
+
+
+      return false;
+    };
+
+
+  /* =========================================================
+     FIND BEST CLICK TARGETS
      ========================================================= */
 
   APP.getClickTargets = row => {
 
     const targets = [];
 
+
     /*
-     * Screenshot shows a nested Google checkbox component
-     * with aria-checked / role=presentation.
+     * Google's nested visual checkbox.
      */
 
-    const checkboxWidgets =
-      Array.from(
-        row.querySelectorAll(
-          [
-            '[role="checkbox"]',
-            '[role="presentation"][aria-checked]',
-            '[aria-checked]'
-          ].join(",")
-        )
+    row
+      .querySelectorAll(
+        [
+          '[role="checkbox"]',
+          '[role="presentation"][aria-checked]',
+          '[aria-checked]'
+        ].join(",")
+      )
+      .forEach(element =>
+        targets.push(element)
       );
 
-    checkboxWidgets.forEach(
-      el => targets.push(el)
-    );
 
     /*
-     * Google's visual box is generally one of the first
-     * nested DIVs inside the menuitemcheckbox.
+     * Label/text itself.
      */
 
-    const directDivs =
-      Array.from(
-        row.children
-      ).filter(
-        el => el.tagName === "DIV"
-      );
+    const label =
+      APP.getRowLabel(row);
 
-    directDivs.forEach(
-      el => targets.push(el)
-    );
+
+    if (label) {
+
+      const wanted =
+        APP.normalize(label);
+
+
+      const descendants =
+        Array.from(
+          row.querySelectorAll(
+            "span,div,label"
+          )
+        );
+
+
+      const textElement =
+        descendants.find(
+          element =>
+            APP.normalize(
+              element.textContent
+            ) === wanted
+        );
+
+
+      if (textElement) {
+        targets.push(
+          textElement
+        );
+      }
+    }
+
 
     /*
-     * Finally try the entire menuitem row itself.
+     * Actual menuitemcheckbox row.
      */
 
     targets.push(row);
+
 
     return Array.from(
       new Set(targets)
@@ -445,195 +878,150 @@
 
 
   /* =========================================================
-     WAIT A FEW MS FOR ARIA STATE UPDATE
+     MOUSE EVENT FALLBACK
      ========================================================= */
 
-  APP.waitForState =
-    async (name, desired, timeout = 180) => {
+  APP.dispatchMouseClick =
+    target => {
 
-      let elapsed = 0;
+      const common = {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        view: window,
+        button: 0
+      };
 
-      while (elapsed <= timeout) {
 
-        const fresh =
-          APP.findRow(name);
+      target.dispatchEvent(
+        new MouseEvent(
+          "mousedown",
+          {
+            ...common,
+            buttons: 1
+          }
+        )
+      );
 
-        if (
-          fresh &&
-          APP.checked(fresh) === desired
-        ) {
-          return true;
-        }
 
-        await APP.sleep(15);
+      target.dispatchEvent(
+        new MouseEvent(
+          "mouseup",
+          {
+            ...common,
+            buttons: 0
+          }
+        )
+      );
 
-        elapsed += 15;
-      }
 
-      return false;
+      target.dispatchEvent(
+        new MouseEvent(
+          "click",
+          {
+            ...common,
+            buttons: 0
+          }
+        )
+      );
     };
 
 
   /* =========================================================
-     FORCE DESIRED STATE
+     SET HIGHLIGHT STATE
      ========================================================= */
 
-  APP.setState =
-    async (name, desired) => {
+  APP.setHighlight =
+    async (
+      name,
+      desired
+    ) => {
 
       let row =
         APP.findRow(name);
 
+
       if (!row) {
 
         console.warn(
-          "⚠ Not found:",
-          name
+          `⚠ Not available: ${name}`
         );
 
         return false;
       }
 
+
+      let state =
+        APP.getCheckedState(
+          row
+        );
+
+
       if (
-        APP.checked(row) === desired
+        state === desired
       ) {
+
         return true;
       }
 
 
       const targets =
-        APP.getClickTargets(row);
+        APP.getClickTargets(
+          row
+        );
 
 
       /*
-       * METHOD 1:
-       * Native click on each likely Google checkbox target.
+       * Try the likely controls one at a time.
+       * Stop immediately after Google changes state.
        */
 
       for (
         const target of targets
       ) {
 
+        APP.checkStop();
+
+
         try {
+
           target.click();
+
         } catch (_) {}
 
-        await APP.sleep(APP.delay.click);
 
         if (
           await APP.waitForState(
             name,
-            desired,
-            80
+            desired
           )
         ) {
+
           return true;
         }
-      }
 
 
-      /*
-       * METHOD 2:
-       * Full mouse sequence on each target.
-       */
-
-      row =
-        APP.findRow(name);
-
-      if (!row) {
-        return false;
-      }
-
-      const freshTargets =
-        APP.getClickTargets(row);
-
-
-      for (
-        const target of freshTargets
-      ) {
-
-        APP.mouseSequence(target);
-
-        await APP.sleep(APP.delay.retry);
-
-        if (
-          await APP.waitForState(
-            name,
-            desired,
-            100
-          )
-        ) {
-          return true;
-        }
-      }
-
-
-      /*
-       * METHOD 3:
-       * Focus row + Enter / Space style interaction.
-       */
-
-      row =
-        APP.findRow(name);
-
-      if (row) {
+        /*
+         * Fallback event sequence.
+         */
 
         try {
 
-          row.focus({
-            preventScroll: true
-          });
+          APP.dispatchMouseClick(
+            target
+          );
 
         } catch (_) {}
 
 
-        for (
-          const key of [" ", "Enter"]
+        if (
+          await APP.waitForState(
+            name,
+            desired
+          )
         ) {
 
-          row.dispatchEvent(
-            new KeyboardEvent(
-              "keydown",
-              {
-                key,
-                code:
-                  key === " "
-                    ? "Space"
-                    : "Enter",
-                bubbles: true,
-                cancelable: true
-              }
-            )
-          );
-
-          row.dispatchEvent(
-            new KeyboardEvent(
-              "keyup",
-              {
-                key,
-                code:
-                  key === " "
-                    ? "Space"
-                    : "Enter",
-                bubbles: true,
-                cancelable: true
-              }
-            )
-          );
-
-          await APP.sleep(
-            APP.delay.retry
-          );
-
-          if (
-            await APP.waitForState(
-              name,
-              desired,
-              100
-            )
-          ) {
-            return true;
-          }
+          return true;
         }
       }
 
@@ -646,7 +1034,7 @@
      CONFIGURE CURRENT TAB
      ========================================================= */
 
-  APP.configureTab =
+  APP.configureCurrentTab =
     async tabName => {
 
       let rows =
@@ -654,11 +1042,16 @@
 
 
       console.log(
-        `📋 ${tabName}: ${rows.length} options found.`
+        `📋 ${tabName}: ${rows.length} highlight options detected.`
       );
 
 
       if (!rows.length) {
+
+        console.error(
+          `❌ No highlight options found for ${tabName}.`
+        );
+
 
         return {
           status: "error"
@@ -666,49 +1059,68 @@
       }
 
 
-      /* -----------------------------------------------------
+      /* =====================================================
          STEP 1
-         Remove every selected option that is not required.
-         ----------------------------------------------------- */
+         REMOVE WRONG CURRENT SELECTIONS
+         ===================================================== */
 
       for (
         const row of rows
       ) {
 
         const name =
-          APP.label(row);
+          APP.getRowLabel(row);
+
+
+        if (!name) {
+          continue;
+        }
+
 
         const normalized =
           APP.normalize(name);
 
 
+        const selected =
+          APP.getCheckedState(
+            row
+          );
+
+
         if (
-          APP.checked(row) &&
+          selected === true &&
           !APP.requiredSet.has(
             normalized
           )
         ) {
 
           const success =
-            await APP.setState(
+            await APP.setHighlight(
               name,
               false
             );
 
 
-          console.log(
-            success
-              ? `⬜ Removed: ${name}`
-              : `⚠ Could not remove: ${name}`
-          );
+          if (success) {
+
+            console.log(
+              `⬜ Removed: ${name}`
+            );
+
+          } else {
+
+            console.warn(
+              `⚠ Could not remove: ${name}`
+            );
+          }
         }
       }
 
 
-      /* -----------------------------------------------------
+      /* =====================================================
          STEP 2
-         Select six required items.
-         ----------------------------------------------------- */
+         CHECK THE SIX REQUIRED HIGHLIGHTS
+         ===================================================== */
 
       const failures = [];
 
@@ -718,8 +1130,11 @@
         APP.required
       ) {
 
+        APP.checkStop();
+
+
         const success =
-          await APP.setState(
+          await APP.setHighlight(
             name,
             true
           );
@@ -737,14 +1152,17 @@
             `❌ Could not select: ${name}`
           );
 
-          failures.push(name);
+
+          failures.push(
+            name
+          );
         }
       }
 
 
-      /* -----------------------------------------------------
-         FINAL STATE DIRECTLY FROM aria-checked
-         ----------------------------------------------------- */
+      /* =====================================================
+         AUDIT
+         ===================================================== */
 
       rows =
         APP.getRows();
@@ -752,24 +1170,38 @@
 
       const selected =
         rows
-          .filter(APP.checked)
-          .map(APP.label);
+          .filter(
+            row =>
+              APP.getCheckedState(
+                row
+              ) === true
+          )
+          .map(
+            APP.getRowLabel
+          );
 
 
-      const requiredSelected =
+      const correct =
         APP.required.filter(
-          name =>
-            selected.some(
-              selectedName =>
+          required => {
+
+            const wanted =
+              APP.normalize(
+                required
+              );
+
+
+            return selected.some(
+              current =>
                 APP.normalize(
-                  selectedName
-                ) ===
-                APP.normalize(name)
-            )
+                  current
+                ) === wanted
+            );
+          }
         );
 
 
-      const wrongSelected =
+      const wrong =
         selected.filter(
           name =>
             !APP.requiredSet.has(
@@ -779,21 +1211,34 @@
 
 
       const success =
-        requiredSelected.length === 6 &&
-        wrongSelected.length === 0;
+        (
+          correct.length === 6 &&
+          wrong.length === 0
+        );
 
 
-      console.log(
-        `${tabName}: ${requiredSelected.length}/6 required selected.`
-      );
+      if (success) {
 
+        console.log(
+          `✅ ${tabName}: 6/6 correct.`
+        );
 
-      if (wrongSelected.length) {
+      } else {
 
         console.warn(
-          "Wrong selections:",
-          wrongSelected
+          `⚠ ${tabName}: ${correct.length}/6 correct.`
         );
+
+
+        if (
+          wrong.length
+        ) {
+
+          console.warn(
+            "Wrong selected:",
+            wrong
+          );
+        }
       }
 
 
@@ -803,96 +1248,33 @@
             ? "processed"
             : "warning",
 
-        selected,
-        requiredSelected,
-        wrongSelected,
-        failures
+        correct:
+          correct,
+
+        wrong:
+          wrong,
+
+        failures:
+          failures
       };
     };
 
 
   /* =========================================================
-     PROCESS TAB
-     ========================================================= */
-
-  APP.processTab =
-    async config => {
-
-      const tab =
-        APP.findTab(config.name);
-
-
-      if (!tab) {
-
-        if (config.optional) {
-
-          console.log(
-            `⏭ ${config.name}: unavailable — skipped.`
-          );
-
-          return {
-            status: "skipped"
-          };
-        }
-
-
-        console.error(
-          `❌ ${config.name}: tab not found.`
-        );
-
-        return {
-          status: "missing"
-        };
-      }
-
-
-      console.log("");
-      console.log(
-        "========================================"
-      );
-
-      console.log(
-        "▶ " +
-        config.name.toUpperCase()
-      );
-
-      console.log(
-        "========================================"
-      );
-
-
-      await APP.openTab(
-        config.name
-      );
-
-
-      const result =
-        await APP.configureTab(
-          config.name
-        );
-
-
-      await APP.sleep(
-        APP.delay.betweenTabs
-      );
-
-
-      return result;
-    };
-
-
-  /* =========================================================
-     RUN
+     MASTER RUN
      ========================================================= */
 
   APP.run =
     async () => {
 
+      APP.stopRequested = false;
+
+
       console.clear();
 
 
       console.log(
-        "========================================"
+        "============================================"
       );
 
       console.log(
@@ -900,60 +1282,182 @@
       );
 
       console.log(
-        "FAST BUSINESS INFO AUTOMATION V4"
+        "LSA BUSINESS INFO - ALL TABS"
       );
 
       console.log(
-        "========================================"
+        "============================================"
       );
 
 
-      if (!APP.getModal()) {
+      const modal =
+        APP.getModal();
+
+
+      if (!modal) {
 
         throw new Error(
-          "Business Info modal not found."
+          'Could not find the "Business info" modal.'
         );
       }
+
+
+      /*
+       * Discover every tab Google provided.
+       */
+
+      const tabs =
+        APP.getTabs();
+
+
+      if (!tabs.length) {
+
+        throw new Error(
+          "No Business Info tabs detected."
+        );
+      }
+
+
+      const tabNames =
+        tabs.map(
+          APP.getTabName
+        );
+
+
+      console.log(
+        `✅ Detected ${tabs.length} tab(s):`
+      );
+
+
+      tabNames.forEach(
+        (name, index) => {
+
+          console.log(
+            `${index + 1}. ${name}`
+          );
+        }
+      );
 
 
       const results = {};
 
 
+      /* =====================================================
+         JUMP THROUGH EVERY AVAILABLE TAB
+         ===================================================== */
+
       for (
-        const tab of APP.tabs
+        let i = 0;
+        i < tabs.length;
+        i++
       ) {
 
-        results[tab.name] =
-          await APP.processTab(tab);
+        APP.checkStop();
+
+
+        /*
+         * Re-fetch tabs because Google may rebuild the DOM
+         * after changing categories.
+         */
+
+        const freshTabs =
+          APP.getTabs();
+
+
+        const tab =
+          freshTabs[i];
+
+
+        if (!tab) {
+
+          console.warn(
+            `⚠ Tab ${i + 1} disappeared — skipping.`
+          );
+
+          continue;
+        }
+
+
+        const tabName =
+          APP.getTabName(
+            tab
+          );
+
+
+        console.log("");
+        console.log(
+          "============================================"
+        );
+
+        console.log(
+          `▶ TAB ${i + 1}/${tabs.length}: ${tabName.toUpperCase()}`
+        );
+
+        console.log(
+          "============================================"
+        );
+
+
+        await APP.activateTab(
+          tab
+        );
+
+
+        results[tabName] =
+          await APP.configureCurrentTab(
+            tabName
+          );
+
+
+        await APP.sleep(
+          APP.settings.betweenTabs
+        );
       }
 
 
-      console.log("");
-      console.log(
-        "========================================"
-      );
-
-      console.log(
-        "🏁 COMPLETE"
-      );
-
-      console.log(
-        "========================================"
-      );
-
-
-      APP.tabs.forEach(tab => {
-
-        console.log(
-          tab.name + ":",
-          results[tab.name]?.status
-        );
-      });
-
+      /* =====================================================
+         COMPLETE
+         ===================================================== */
 
       console.log("");
+      console.log(
+        "============================================"
+      );
+
+      console.log(
+        "🏁 BUSINESS INFO AUTOMATION COMPLETE"
+      );
+
+      console.log(
+        "============================================"
+      );
+
+
+      Object.entries(
+        results
+      ).forEach(
+        ([name, result]) => {
+
+          console.log(
+            `${name}: ${result.status}`
+          );
+        }
+      );
+
+
+      console.log("");
+      console.log(
+        `Processed ${Object.keys(results).length} / ${tabs.length} tabs.`
+      );
+
+
       console.log(
         "🔒 SAVE was NOT clicked."
+      );
+
+
+      console.log(
+        "Please review the tabs, then click SAVE manually."
       );
 
 
@@ -973,10 +1477,21 @@
 
     } catch (error) {
 
-      console.error(
-        "❌ BUSINESS INFO AUTOMATION ERROR:",
-        error
-      );
+      if (
+        APP.stopRequested
+      ) {
+
+        console.warn(
+          "🛑 Business Info automation stopped."
+        );
+
+      } else {
+
+        console.error(
+          "❌ BUSINESS INFO AUTOMATION ERROR:",
+          error
+        );
+      }
 
     } finally {
 
